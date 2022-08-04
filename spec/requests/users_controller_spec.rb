@@ -5559,6 +5559,86 @@ RSpec.describe UsersController do
     end
   end
 
+  describe "#user_menu_bookmarks" do
+    fab!(:post) { Fabricate(:post) }
+    fab!(:topic) { Fabricate(:post).topic }
+    fab!(:bookmark_with_reminder) { Fabricate(:bookmark, user: admin, bookmarkable: post) }
+    fab!(:bookmark_without_reminder) { Fabricate(:bookmark, user: admin, bookmarkable: topic) }
+
+    before do
+      TopicUser.change(admin.id, post.topic.id, total_msecs_viewed: 1)
+      TopicUser.change(admin.id, topic.id, total_msecs_viewed: 1)
+      BookmarkReminderNotificationHandler
+        .new(bookmark_with_reminder)
+        .send_notification
+      sign_in(admin)
+    end
+
+    it "sends an array of unread bookmark_reminder notifications" do
+      get "/u/#{admin.username}/user-menu-bookmarks"
+      expect(response.status).to eq(200)
+
+      notifications = response.parsed_body["notifications"]
+      expect(notifications.size).to eq(1)
+      expect(notifications.first["data"]["bookmark_id"]).to eq(bookmark_with_reminder.id)
+
+      bookmark_reminder = admin
+        .notifications
+        .where(notification_type: Notification.types[:bookmark_reminder])
+        .where("data::json ->> 'bookmark_id' = ?", bookmark_with_reminder.id.to_s)
+        .first
+      bookmark_reminder.update!(read: true)
+
+      get "/u/#{admin.username}/user-menu-bookmarks"
+      expect(response.status).to eq(200)
+
+      notifications = response.parsed_body["notifications"]
+      expect(notifications).to be_empty
+    end
+
+    it "responds with an array of bookmarks that are not associated with any of the unread bookmark_reminder notifications" do
+      get "/u/#{admin.username}/user-menu-bookmarks"
+      expect(response.status).to eq(200)
+
+      bookmarks = response.parsed_body["bookmarks"]
+      expect(bookmarks.size).to eq(1)
+      expect(bookmarks.first["id"]).to eq(bookmark_without_reminder.id)
+
+      bookmark_reminder = admin
+        .notifications
+        .where(notification_type: Notification.types[:bookmark_reminder])
+        .where("data::json ->> 'bookmark_id' = ?", bookmark_with_reminder.id.to_s)
+        .first
+
+      bookmark_reminder.update!(read: true)
+      get "/u/#{admin.username}/user-menu-bookmarks"
+      expect(response.status).to eq(200)
+
+      bookmarks = response.parsed_body["bookmarks"]
+      expect(bookmarks.map { |bookmark| bookmark["id"] }).to contain_exactly(
+        bookmark_with_reminder.id,
+        bookmark_without_reminder.id
+      )
+
+      data = bookmark_reminder.data_hash
+      data.delete(:bookmark_id)
+      bookmark_reminder.update!(data: data.to_json, read: false)
+
+      get "/u/#{admin.username}/user-menu-bookmarks"
+      expect(response.status).to eq(200)
+
+      notifications = response.parsed_body["notifications"]
+      expect(notifications.size).to eq(1)
+      expect(notifications.first["data"]["bookmark_id"]).to be_nil
+
+      bookmarks = response.parsed_body["bookmarks"]
+      expect(bookmarks.map { |bookmark| bookmark["id"] }).to contain_exactly(
+        bookmark_with_reminder.id,
+        bookmark_without_reminder.id
+      )
+    end
+  end
+
   def create_second_factor_security_key
     sign_in(user1)
     stub_secure_session_confirmed
