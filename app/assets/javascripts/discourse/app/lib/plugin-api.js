@@ -99,6 +99,7 @@ import { addSectionLink as addCustomCommunitySectionLink } from "discourse/lib/s
 import { addSidebarSection } from "discourse/lib/sidebar/custom-sections";
 import DiscourseURL from "discourse/lib/url";
 import { registerNotificationTypeRenderer } from "discourse/lib/notification-item";
+import { registerUserMenuTab } from "discourse/lib/user-menu/tab";
 
 // If you add any methods to the API ensure you bump up the version number
 // based on Semantic Versioning 2.0.0. Please update the changelog at
@@ -1881,6 +1882,37 @@ class PluginApi {
    */
   registerNotificationTypeRenderer(notificationType, func) {
     registerNotificationTypeRenderer(notificationType, func);
+  }
+
+  /**
+   * EXPERIMENTAL. Do not use.
+   * Registers a new tab in the user menu. This API method expects a callback
+   * that should return a class inheriting from the class (UserMenuTab) that's
+   * passed to the callback. See discourse/app/lib/user-menu/tab.js for
+   * documentation of UserMenuTab.
+   *
+   * ```
+   * api.registerUserMenuTab((UserMenuTab) => {
+   *   return class extends UserMenuTab {
+   *   }
+   * });
+   * ```
+   *
+   * @param {Object} config
+   * @param {string} config.id - An ID for the tab that's unique among all the existing tabs
+   * @param {string} config.panelComponent - A Glimmer component that's rendered in the user menu when the tab is active
+   * @param {string} config.icon - Icon name for the tab
+   * @param {string[]} [config.notificationTypesForCount] - An array of notification types whose unread counts will be summed and shown on the tab (if greater than 0). Note that only unread *high priority* notifications are counted
+   * @param {tabDisplayConditionCallback} [config.shouldDisplay] - A callback that determines whether the tab should be rendered. If this callback isn't given, the tab will always be rendered
+   *
+   * @callback tabDisplayConditionCallback
+   * @param {User} currentUser
+   * @param {Object} siteSettings
+   * @param {Site} site
+   * @returns {boolean}
+   */
+  registerUserMenuTab(config) {
+    registerUserMenuTab(config);
   }
 }
 
